@@ -1,0 +1,10 @@
+node_modules
+.next
+out
+coverage
+playwright-report
+test-results
+.vercel
+package-lock.json
+public
+docs/blog

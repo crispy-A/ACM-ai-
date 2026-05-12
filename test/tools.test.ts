@@ -28,10 +28,7 @@ describe("calculator tool", () => {
   });
 
   it("拒绝 process.env 之类的敏感访问", async () => {
-    const r = await exec(
-      { expression: "process.env.SECRET" },
-      ctx,
-    );
+    const r = await exec({ expression: "process.env.SECRET" }, ctx);
     expect("error" in r).toBe(true);
   });
 
@@ -94,7 +91,9 @@ describe("web_search tool", () => {
 
     const r = await exec({ query: "hello", max_results: 5 }, ctx);
     expect("results" in r && r.results?.[0].title).toBe("标题");
-    expect("results" in r && r.results?.[0].snippet.length).toBeLessThanOrEqual(400);
+    expect("results" in r && r.results?.[0].snippet.length).toBeLessThanOrEqual(
+      400,
+    );
     expect(mockFetch).toHaveBeenCalledWith(
       "https://api.tavily.com/search",
       expect.objectContaining({ method: "POST" }),

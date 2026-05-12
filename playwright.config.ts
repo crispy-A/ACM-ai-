@@ -12,9 +12,7 @@ export default defineConfig({
     trace: "on-first-retry",
     screenshot: "only-on-failure",
   },
-  projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
-  ],
+  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
     // 测试通过 MOCK_LLM=1 启动，API 路由会返回伪造的数据流，不消耗 Anthropic 配额
     command: "cross-env MOCK_LLM=1 ANTHROPIC_API_KEY=test npm run dev",

@@ -14,10 +14,7 @@ function CodeBlock({
   children: ReactNode;
 }) {
   const [copied, setCopied] = useState(false);
-  const text =
-    typeof children === "string"
-      ? children
-      : extractText(children);
+  const text = typeof children === "string" ? children : extractText(children);
 
   const onCopy = async () => {
     await navigator.clipboard.writeText(text);
@@ -53,7 +50,11 @@ function extractText(node: ReactNode): string {
   return "";
 }
 
-export const Markdown = memo(function Markdown({ content }: { content: string }) {
+export const Markdown = memo(function Markdown({
+  content,
+}: {
+  content: string;
+}) {
   return (
     <div className="prose-custom">
       <ReactMarkdown
@@ -74,9 +75,7 @@ export const Markdown = memo(function Markdown({ content }: { content: string })
                 </code>
               );
             }
-            return (
-              <CodeBlock language={match[1]}>{children}</CodeBlock>
-            );
+            return <CodeBlock language={match[1]}>{children}</CodeBlock>;
           },
           pre({ children }) {
             return <>{children}</>;

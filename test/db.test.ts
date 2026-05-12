@@ -47,9 +47,7 @@ describe("conversations CRUD", () => {
 describe("messages persistence", () => {
   it("saveMessages 覆盖旧记录而不是追加", async () => {
     const c = await createConversation("x");
-    await saveMessages(c.id, [
-      { id: "m1", role: "user", content: "v1" },
-    ]);
+    await saveMessages(c.id, [{ id: "m1", role: "user", content: "v1" }]);
     await saveMessages(c.id, [
       { id: "m1", role: "user", content: "v2" },
       { id: "m2", role: "assistant", content: "hi" },
@@ -83,7 +81,10 @@ describe("messages persistence", () => {
     const c = await createConversation("x");
     const parts = [
       { type: "text", text: "答案是 42" },
-      { type: "tool-invocation", toolInvocation: { state: "result", toolName: "calculator" } },
+      {
+        type: "tool-invocation",
+        toolInvocation: { state: "result", toolName: "calculator" },
+      },
     ];
     await saveMessages(c.id, [
       { id: "m1", role: "assistant", content: "答案是 42", parts },

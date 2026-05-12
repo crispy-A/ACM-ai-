@@ -40,7 +40,6 @@ function safeEval(expr: string): number {
   if (!/^[\d+\-*/().\s%]+$/.test(expr)) {
     throw new Error("表达式包含非法字符");
   }
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
   const fn = new Function(`"use strict"; return (${expr});`);
   const result = fn();
   if (typeof result !== "number" || !isFinite(result)) {

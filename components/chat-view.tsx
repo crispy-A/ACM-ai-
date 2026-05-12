@@ -5,16 +5,16 @@ import type { Message } from "ai";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
-import {
-  createConversation,
-  loadMessages,
-  saveMessages,
-} from "@/lib/db";
+import { createConversation, loadMessages, saveMessages } from "@/lib/db";
 import { MessageBubble } from "./message-bubble";
 import { Sidebar } from "./sidebar";
 import { seedMessages } from "@/lib/seed";
 
-export function ChatView({ conversationId }: { conversationId: string | null }) {
+export function ChatView({
+  conversationId,
+}: {
+  conversationId: string | null;
+}) {
   const router = useRouter();
 
   const {
@@ -167,7 +167,8 @@ export function ChatView({ conversationId }: { conversationId: string | null }) 
       <main className="mx-auto flex h-screen flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-neutral-200 px-4 py-2 text-xs text-neutral-500 dark:border-neutral-800">
           <span>
-            {conversationId ? "ACM AI Agent" : "新对话"} · Claude Sonnet 4.6 · 工具：时间 / 计算器 / 联网搜索
+            {conversationId ? "ACM AI Agent" : "新对话"} · Claude Sonnet 4.6 ·
+            工具：时间 / 计算器 / 联网搜索
           </span>
           {process.env.NODE_ENV === "development" && conversationId && (
             <span className="flex gap-1">
@@ -199,7 +200,8 @@ export function ChatView({ conversationId }: { conversationId: string | null }) 
             <div className="mt-24 space-y-2 text-center text-neutral-400">
               <div className="text-lg font-medium">有什么想聊的？</div>
               <div className="text-xs">
-                试试：「今天几号」「(123+456)*78 等于多少」「Claude 最近有什么新消息」
+                试试：「今天几号」「(123+456)*78 等于多少」「Claude
+                最近有什么新消息」
               </div>
             </div>
           ) : (

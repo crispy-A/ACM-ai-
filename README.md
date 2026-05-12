@@ -1,19 +1,71 @@
 # ACM AI Agent
 
-基于 Next.js 15 + Vercel AI SDK + Claude 的通用对话 AI agent，支持工具调用、流式响应、虚拟滚动。
+<p align="center">
+  基于 Next.js 15 + Vercel AI SDK + Claude 的通用对话 AI agent<br/>
+  支持多步工具调用、流式响应、虚拟滚动、IndexedDB 多会话持久化
+</p>
+
+<p align="center">
+  <a href="https://acm-ai-pearl.vercel.app/"><img alt="Live Demo" src="https://img.shields.io/badge/Live_Demo-online-success?style=for-the-badge&logo=vercel"></a>
+  <a href="https://github.com/crispy-A/ACM-ai-/actions"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/crispy-A/ACM-ai-/ci.yml?branch=main&label=CI&style=for-the-badge"></a>
+  <img alt="Next.js" src="https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=next.js">
+  <img alt="React" src="https://img.shields.io/badge/React-19-61dafb?style=for-the-badge&logo=react">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-3178c6?style=for-the-badge&logo=typescript">
+</p>
+
+<p align="center">
+  <b><a href="https://acm-ai-pearl.vercel.app/">→ 在线体验</a></b>
+  &nbsp;·&nbsp;
+  <b><a href="docs/blog/tool-calling.md">→ 技术博客：多步工具调用 + 可视化</a></b>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/hero.png" alt="产品截图" width="900">
+</p>
+
+> 如果上面截图还没显示，是因为我还没把 `docs/screenshots/hero.png` 放进仓库。录完 GIF 或截图直接替换即可。
 
 ## 特性
 
 - **流式对话** — SSE 流式渲染 Claude 响应
 - **多会话管理** — IndexedDB 持久化（Dexie）+ 路由 `/chat/[id]`，侧边栏新建/删除/双击重命名
 - **Markdown + 代码高亮** — react-markdown + highlight.js，代码块一键复制
-- **工具调用 (Tool Use)** — 多步 agent 循环（`maxSteps: 5`），内置三个工具：
+- **多步工具调用 (Tool Use)** — agentic 循环（`maxSteps: 5`），内置三个工具：
   - `get_current_time` — 时区感知的时间查询
   - `calculator` — 正则白名单的安全表达式求值
   - `web_search` — Tavily 联网搜索
 - **工具调用可视化** — 可折叠卡片展示入参 / 状态 / 结果
 - **虚拟滚动** — react-virtuoso，万条消息对话保持流畅
-- **按需加载** — markdown 渲染器首屏不加载，拆出 71 kB
+- **按需加载** — markdown 渲染器首屏不加载，拆出 71 kB（−28.5%）
+- **完整工程链路** — Vitest 单测（23 个）+ Playwright E2E（3 个）+ GitHub Actions CI
+
+## 架构
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│                         浏览器 (Next.js Client)                 │
+│                                                                 │
+│  ┌──────────────┐     ┌──────────────┐    ┌──────────────┐     │
+│  │  ChatView    │────▶│   useChat    │───▶│  Virtuoso    │     │
+│  │  (Virtuoso)  │     │ (AI SDK hook)│    │  (虚拟滚动)  │     │
+│  └──────────────┘     └──────┬───────┘    └──────────────┘     │
+│         │                    │                                  │
+│         ▼                    │ POST /api/chat                   │
+│  ┌──────────────┐             ▼                                 │
+│  │    Dexie     │    ┌──────────────────┐                       │
+│  │ (IndexedDB)  │    │  Next.js Route   │                       │
+│  │ 会话/消息持久化│   │  streamText +    │                       │
+│  └──────────────┘    │  tools + maxSteps│                       │
+│                      └────────┬─────────┘                       │
+└───────────────────────────────┼─────────────────────────────────┘
+                                │
+                      ┌─────────┴──────────┐
+                      ▼                    ▼
+              ┌───────────────┐    ┌───────────────┐
+              │ Claude Sonnet │    │  Tool APIs    │
+              │  (Anthropic)  │    │  (Tavily etc.)│
+              └───────────────┘    └───────────────┘
+```
 
 ## 快速开始
 
@@ -37,12 +89,13 @@ npm run dev                        # http://localhost:3000
 
 ### First Load JS
 
-| 路由          | 改造前 | 改造后 | 降幅    |
-| ------------- | ------ | ------ | ------- |
-| `/`           | 249 kB | 178 kB | −28.5%  |
-| `/chat/[id]`  | 249 kB | 178 kB | −28.5%  |
+| 路由         | 改造前 | 改造后 | 降幅   |
+| ------------ | ------ | ------ | ------ |
+| `/`          | 249 kB | 178 kB | −28.5% |
+| `/chat/[id]` | 249 kB | 178 kB | −28.5% |
 
 改造手段：
+
 - markdown 渲染器（`react-markdown` + `remark-gfm` + `rehype-highlight` + `highlight.js`）用 `next/dynamic` 按需加载
 - bundle 分析：`npm run analyze`
 
@@ -99,24 +152,50 @@ npm run typecheck     # 三份 tsconfig：主包 + test + e2e
 ```
 
 单测覆盖：
+
 - `lib/ai/tools.ts` — calculator 正则白名单防注入、时区处理、Tavily fetch mock
 - `lib/db.ts` — IndexedDB CRUD（fake-indexeddb）、会话隔离、parts 持久化
 - `components/tool-invocation-card.tsx` — 折叠展开、web_search 特殊渲染
 
 E2E 覆盖（`MOCK_LLM=1` 避免消耗 API 额度）：
+
 - 首次进入发消息 → 自动建会话 → 看到流式回复
 - 侧边栏显示新建的会话
 - 新建对话按钮跳到新的空会话
 
 CI 在每次 push / PR 时自动跑完上面全部内容。
 
+## 代码质量
+
+```bash
+npm run format        # Prettier 全量格式化
+npm run format:check  # CI 用的只检查不改
+npm run lint          # ESLint (flat config)
+npm run lint:fix      # 自动修复
+```
+
+提交守门（Husky）：
+
+- **pre-commit** → `lint-staged`：只对已暂存文件跑 `eslint --fix` + `prettier --write`，不影响未改的代码
+- **commit-msg** → `commitlint`：强制 [Conventional Commits](https://www.conventionalcommits.org/)（`feat:` / `fix:` / `chore:` ...），`git push xxx` 这种无类型前缀的 commit 会被拒
+
+本地一次 `git commit` 会自动：
+
+```
+1. 对 staged 的 .ts/.tsx 跑 ESLint + Prettier → 失败阻止提交
+2. 校验 commit message 是否符合 Conventional Commits → 失败阻止提交
+```
+
+CI 里也兜底跑一遍 `format:check` + `lint`，防止绕过钩子的提交合入 main。
+
 ## 下一步
 
 - [x] 测试：Vitest 单测 + Playwright 端到端
 - [x] GitHub Actions CI（typecheck + lint + test + build）
+- [x] 部署到 Vercel
+- [x] 代码质量基础设施（Prettier + ESLint flat + Husky + lint-staged + Commitlint）
 - [ ] 流式期间实时持久化（修断电丢回复）
 - [ ] 多模态上传（图片 / PDF + Claude Vision）
 - [ ] 纯前端 RAG（embedding + IndexedDB 向量检索）
 - [ ] 命令面板 `Cmd+K` + 键盘快捷键
 - [ ] 无障碍：`aria-live` 流式朗读 / 焦点管理
-- [ ] 部署到 Vercel

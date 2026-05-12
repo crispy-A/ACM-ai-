@@ -16,7 +16,9 @@ class ChatDB extends Dexie {
 
 export const db = new ChatDB();
 
-export async function createConversation(title = "新对话"): Promise<Conversation> {
+export async function createConversation(
+  title = "新对话",
+): Promise<Conversation> {
   const now = Date.now();
   const conv: Conversation = {
     id: crypto.randomUUID(),
@@ -41,7 +43,12 @@ export async function deleteConversation(id: string) {
 
 export async function saveMessages(
   conversationId: string,
-  messages: Array<{ id: string; role: string; content: string; parts?: unknown }>,
+  messages: Array<{
+    id: string;
+    role: string;
+    content: string;
+    parts?: unknown;
+  }>,
 ) {
   const now = Date.now();
   const rows: StoredMessage[] = messages.map((m, i) => ({
@@ -59,7 +66,9 @@ export async function saveMessages(
   });
 }
 
-export async function loadMessages(conversationId: string): Promise<StoredMessage[]> {
+export async function loadMessages(
+  conversationId: string,
+): Promise<StoredMessage[]> {
   return db.messages
     .where("[conversationId+createdAt]")
     .between([conversationId, Dexie.minKey], [conversationId, Dexie.maxKey])
