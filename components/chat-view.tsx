@@ -8,7 +8,11 @@ import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { createConversation, loadMessages, saveMessages } from "@/lib/db";
 import { MessageBubble } from "./message-bubble";
 import { Sidebar } from "./sidebar";
+import { KnowledgePanel } from "./knowledge-panel";
 import { seedMessages } from "@/lib/seed";
+import { loadAllChunks } from "@/lib/db";
+import { embed } from "@/lib/rag/embedder";
+import { retrieveTopK } from "@/lib/rag/retrieve";
 
 export function ChatView({
   conversationId,
@@ -16,6 +20,13 @@ export function ChatView({
   conversationId: string | null;
 }) {
   const router = useRouter();
+
+  // RAG
+  const [ragEnabled, setRagEnabled] = useState(false);
+  const [showKnowledge, setShowKnowledge] = useState(false);
+  const [ragStatus, setRagStatus] = useState<string | null>(null);
+  // 发送前计算好的上下文，通过 prepareRequestBody 传给后端
+  const ragContextRef = useRef<string | undefined>(undefined);
 
   const {
     messages,
@@ -28,7 +39,14 @@ export function ChatView({
     reload,
     error,
     append,
-  } = useChat({ api: "/api/chat", maxSteps: 5 });
+  } = useChat({
+    api: "/api/chat",
+    maxSteps: 5,
+    experimental_prepareRequestBody: ({ messages }) => ({
+      messages,
+      ragContext: ragContextRef.current,
+    }),
+  });
 
   const isStreaming = status === "submitted" || status === "streaming";
 
@@ -82,7 +100,6 @@ export function ChatView({
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const [atBottom, setAtBottom] = useState(true);
 
-  // 新消息到达时自动滚到底（除非用户正在手动向上查看历史）
   useEffect(() => {
     if (messages.length === 0) return;
     if (!atBottom) return;
@@ -93,7 +110,6 @@ export function ChatView({
     });
   }, [messages.length, atBottom, isStreaming]);
 
-  // 流式追加时，如果用户在底部，就持续粘底
   const lastContent = messages[messages.length - 1]?.content;
   useEffect(() => {
     if (!isStreaming) return;
@@ -105,6 +121,48 @@ export function ChatView({
     });
   }, [lastContent, isStreaming, atBottom, messages.length]);
 
+  /**
+   * RAG 检索：本地 embedding + cosine top-k。
+   * 发送前调用，把拼好的上下文塞进 ragContextRef，
+   * 然后 experimental_prepareRequestBody 会把它带上去。
+   */
+  const prepareRagContext = useCallback(
+    async (query: string): Promise<void> => {
+      ragContextRef.current = undefined;
+      if (!ragEnabled) return;
+      const chunks = await loadAllChunks();
+      if (chunks.length === 0) {
+        setRagStatus("知识库为空");
+        setTimeout(() => setRagStatus(null), 1500);
+        return;
+      }
+      setRagStatus("检索知识库...");
+      try {
+        const q = await embed(query);
+        const hits = retrieveTopK(q, chunks, 4);
+        if (hits.length === 0) {
+          setRagStatus(null);
+          return;
+        }
+        const ctx = hits
+          .map(
+            (h, i) =>
+              `[片段 ${i + 1}, 相似度 ${h.score.toFixed(2)}]\n${h.text}`,
+          )
+          .join("\n\n");
+        ragContextRef.current = ctx;
+        setRagStatus(`已注入 ${hits.length} 个片段`);
+        setTimeout(() => setRagStatus(null), 2000);
+      } catch (e) {
+        setRagStatus(
+          `检索失败：${e instanceof Error ? e.message : "未知错误"}`,
+        );
+        setTimeout(() => setRagStatus(null), 3000);
+      }
+    },
+    [ragEnabled],
+  );
+
   // 首条消息自动建会话
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,8 +173,10 @@ export function ChatView({
       const conv = await createConversation(title);
       router.push(`/chat/${conv.id}`);
       sessionStorage.setItem(`pending:${conv.id}`, text);
+      if (ragEnabled) sessionStorage.setItem(`pending-rag:${conv.id}`, "1");
       return;
     }
+    await prepareRagContext(text);
     handleSubmit(e);
   };
 
@@ -126,9 +186,18 @@ export function ChatView({
     const pending = sessionStorage.getItem(key);
     if (pending) {
       sessionStorage.removeItem(key);
-      append({ role: "user", content: pending });
+      const ragKey = `pending-rag:${conversationId}`;
+      const ragWas = sessionStorage.getItem(ragKey);
+      sessionStorage.removeItem(ragKey);
+      (async () => {
+        if (ragWas === "1") {
+          setRagEnabled(true);
+          await prepareRagContext(pending);
+        }
+        append({ role: "user", content: pending });
+      })();
     }
-  }, [conversationId, append]);
+  }, [conversationId, append, prepareRagContext]);
 
   const renderItem = useCallback(
     (index: number) => {
@@ -140,7 +209,6 @@ export function ChatView({
     [messages, isStreaming],
   );
 
-  // dev-only: 灌假数据
   const onSeed = async (n: number) => {
     if (!conversationId) {
       alert("请先新建一个会话");
@@ -170,29 +238,40 @@ export function ChatView({
             {conversationId ? "ACM AI Agent" : "新对话"} · Claude Sonnet 4.6 ·
             工具：时间 / 计算器 / 联网搜索
           </span>
-          {process.env.NODE_ENV === "development" && conversationId && (
-            <span className="flex gap-1">
-              <button
-                onClick={() => onSeed(100)}
-                className="rounded bg-neutral-200 px-2 py-0.5 hover:bg-neutral-300 dark:bg-neutral-800 dark:hover:bg-neutral-700"
-                title="灌 100 条假消息做性能测试"
-              >
-                seed 100
-              </button>
-              <button
-                onClick={() => onSeed(1000)}
-                className="rounded bg-neutral-200 px-2 py-0.5 hover:bg-neutral-300 dark:bg-neutral-800 dark:hover:bg-neutral-700"
-              >
-                seed 1k
-              </button>
-              <button
-                onClick={() => onSeed(10000)}
-                className="rounded bg-neutral-200 px-2 py-0.5 hover:bg-neutral-300 dark:bg-neutral-800 dark:hover:bg-neutral-700"
-              >
-                seed 10k
-              </button>
-            </span>
-          )}
+          <span className="flex items-center gap-2">
+            <button
+              onClick={() => setShowKnowledge((v) => !v)}
+              className={`rounded px-2 py-0.5 ${
+                showKnowledge
+                  ? "bg-blue-600 text-white hover:bg-blue-700"
+                  : "bg-neutral-200 hover:bg-neutral-300 dark:bg-neutral-800 dark:hover:bg-neutral-700"
+              }`}
+              title="打开/关闭知识库面板"
+            >
+              📎 知识库
+            </button>
+            {ragEnabled && (
+              <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                RAG ON
+              </span>
+            )}
+            {process.env.NODE_ENV === "development" && conversationId && (
+              <>
+                <button
+                  onClick={() => onSeed(100)}
+                  className="rounded bg-neutral-200 px-2 py-0.5 hover:bg-neutral-300 dark:bg-neutral-800 dark:hover:bg-neutral-700"
+                >
+                  seed 100
+                </button>
+                <button
+                  onClick={() => onSeed(10000)}
+                  className="rounded bg-neutral-200 px-2 py-0.5 hover:bg-neutral-300 dark:bg-neutral-800 dark:hover:bg-neutral-700"
+                >
+                  seed 10k
+                </button>
+              </>
+            )}
+          </span>
         </header>
 
         <div className="flex-1 overflow-hidden px-4">
@@ -231,6 +310,12 @@ export function ChatView({
           )}
         </div>
 
+        {ragStatus && (
+          <div className="border-t border-neutral-200 bg-emerald-50 px-4 py-1 text-xs text-emerald-700 dark:border-neutral-800 dark:bg-emerald-900/20 dark:text-emerald-300">
+            {ragStatus}
+          </div>
+        )}
+
         <form
           onSubmit={onSubmit}
           className="sticky bottom-0 flex gap-2 border-t border-neutral-200 bg-neutral-50 px-4 py-4 dark:border-neutral-800 dark:bg-neutral-950"
@@ -268,6 +353,14 @@ export function ChatView({
           )}
         </form>
       </main>
+
+      {showKnowledge && (
+        <KnowledgePanel
+          enabled={ragEnabled}
+          onToggle={setRagEnabled}
+          onClose={() => setShowKnowledge(false)}
+        />
+      )}
     </div>
   );
 }

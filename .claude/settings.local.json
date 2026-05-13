@@ -7,7 +7,9 @@
       "Bash(taskkill //F //IM node.exe)",
       "Bash(npm run *)",
       "Bash(npm test *)",
-      "Bash(npx next *)"
+      "Bash(npx next *)",
+      "Bash(npx prettier *)",
+      "Bash(xargs wc -l)"
     ]
   }
 }

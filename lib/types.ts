@@ -20,3 +20,29 @@ export interface Conversation {
   createdAt: number;
   updatedAt: number;
 }
+
+// ---------- RAG ----------
+
+export interface RagDocument {
+  id: string;
+  name: string;
+  /** 文件类型，md | txt */
+  type: string;
+  /** 原文件大小（字节） */
+  size: number;
+  chunkCount: number;
+  createdAt: number;
+}
+
+export interface RagChunk {
+  id: string;
+  documentId: string;
+  /** 在原文中的 chunk 序号 */
+  index: number;
+  text: string;
+  /**
+   * 向量数据，存为 ArrayBuffer（Float32Array 的 buffer）。
+   * 比 number[] 节省 ~80% 空间，IndexedDB 读写也更快。
+   */
+  embedding: ArrayBuffer;
+}

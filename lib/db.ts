@@ -1,15 +1,28 @@
 import Dexie, { type EntityTable } from "dexie";
-import type { Conversation, StoredMessage } from "./types";
+import type {
+  Conversation,
+  RagChunk,
+  RagDocument,
+  StoredMessage,
+} from "./types";
 
 class ChatDB extends Dexie {
   conversations!: EntityTable<Conversation, "id">;
   messages!: EntityTable<StoredMessage, "id">;
+  ragDocuments!: EntityTable<RagDocument, "id">;
+  ragChunks!: EntityTable<RagChunk, "id">;
 
   constructor() {
     super("acm-ai-chat");
     this.version(1).stores({
       conversations: "id, updatedAt",
       messages: "id, conversationId, createdAt, [conversationId+createdAt]",
+    });
+    this.version(2).stores({
+      conversations: "id, updatedAt",
+      messages: "id, conversationId, createdAt, [conversationId+createdAt]",
+      ragDocuments: "id, createdAt",
+      ragChunks: "id, documentId, [documentId+index]",
     });
   }
 }
@@ -73,4 +86,43 @@ export async function loadMessages(
     .where("[conversationId+createdAt]")
     .between([conversationId, Dexie.minKey], [conversationId, Dexie.maxKey])
     .toArray();
+}
+
+// ---------- RAG ----------
+
+export async function addRagDocument(
+  doc: Omit<RagDocument, "id" | "createdAt">,
+  chunks: Array<Omit<RagChunk, "id" | "documentId">>,
+): Promise<string> {
+  const docId = crypto.randomUUID();
+  const fullDoc: RagDocument = {
+    ...doc,
+    id: docId,
+    createdAt: Date.now(),
+  };
+  const fullChunks: RagChunk[] = chunks.map((c) => ({
+    ...c,
+    id: `${docId}-${c.index}`,
+    documentId: docId,
+  }));
+  await db.transaction("rw", db.ragDocuments, db.ragChunks, async () => {
+    await db.ragDocuments.add(fullDoc);
+    await db.ragChunks.bulkAdd(fullChunks);
+  });
+  return docId;
+}
+
+export async function deleteRagDocument(id: string) {
+  await db.transaction("rw", db.ragDocuments, db.ragChunks, async () => {
+    await db.ragDocuments.delete(id);
+    await db.ragChunks.where("documentId").equals(id).delete();
+  });
+}
+
+export async function listRagDocuments(): Promise<RagDocument[]> {
+  return db.ragDocuments.orderBy("createdAt").reverse().toArray();
+}
+
+export async function loadAllChunks(): Promise<RagChunk[]> {
+  return db.ragChunks.toArray();
 }
